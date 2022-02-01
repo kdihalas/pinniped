@@ -68,7 +68,7 @@ func TestSupervisorLogin(t *testing.T) {
 		breakRefreshSessionData func(t *testing.T, sessionData *psession.PinnipedSession, idpName, username string)
 		// Edit the refresh session data between the initial login and the refresh, which is expected to
 		// succeed.
-		editRefreshSessionDataWithoutBreaking func(t *testing.T, sessionData *psession.PinnipedSession)
+		editRefreshSessionDataWithoutBreaking func(t *testing.T, sessionData *psession.PinnipedSession) []string
 	}{
 		{
 			name: "oidc with default username and groups claim settings",
@@ -131,13 +131,14 @@ func TestSupervisorLogin(t *testing.T) {
 			wantDownstreamIDTokenSubjectToMatch:  "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Issuer+"?sub=") + ".+",
 			wantDownstreamIDTokenUsernameToMatch: func(_ string) string { return "^" + regexp.QuoteMeta(env.SupervisorUpstreamOIDC.Username) + "$" },
 			wantDownstreamIDTokenGroups:          env.SupervisorUpstreamOIDC.ExpectedGroups,
-			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession) {
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession) []string {
 				// even if we update this group to the wrong thing, we expect that it will return to the correct
 				// value after we refresh.
 				// However if there are no expected groups then they will not update, so we should skip this.
 				if len(env.SupervisorUpstreamOIDC.ExpectedGroups) > 0 {
 					sessionData.Fosite.Claims.Extra["groups"] = []string{"some-wrong-group", "some-other-group"}
 				}
+				return env.SupervisorUpstreamOIDC.ExpectedGroups
 			},
 		},
 		{
@@ -283,10 +284,11 @@ func TestSupervisorLogin(t *testing.T) {
 					false,
 				)
 			},
-			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession) {
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession) []string {
 				// even if we update this group to the wrong thing, we expect that it will return to the correct
 				// value after we refresh.
 				sessionData.Fosite.Claims.Extra["groups"] = []string{"some-wrong-group", "some-other-group"}
+				return env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs
 			},
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
 				customSessionData := pinnipedSession.Custom
@@ -308,7 +310,7 @@ func TestSupervisorLogin(t *testing.T) {
 			wantDownstreamIDTokenGroups: env.SupervisorUpstreamLDAP.TestUserDirectGroupsDNs,
 		},
 		{
-			name: "ldap with CN as username and group names as CNs and using an LDAP provider which only supports StartTLS", // try another variation of configuration options
+			name: "ldap with CN as username and group names as CNs and using an LDAP provider which only supports StartTLS, skip group refresh", // try another variation of configuration options
 			maybeSkip: func(t *testing.T) {
 				t.Helper()
 				if len(env.ToolsNamespace) == 0 && !env.HasCapability(testlib.CanReachInternetLDAPPorts) {
@@ -345,6 +347,7 @@ func TestSupervisorLogin(t *testing.T) {
 						Attributes: idpv1alpha1.LDAPIdentityProviderGroupSearchAttributes{
 							GroupName: "cn",
 						},
+						SkipGroupRefresh: true,
 					},
 				}, idpv1alpha1.LDAPPhaseReady)
 				expectedMsg := fmt.Sprintf(
@@ -363,6 +366,13 @@ func TestSupervisorLogin(t *testing.T) {
 					httpClient,
 					false,
 				)
+			},
+			editRefreshSessionDataWithoutBreaking: func(t *testing.T, sessionData *psession.PinnipedSession) []string {
+				// update the list of groups to the wrong thing and see that they do not get updated because
+				// skip group refresh is set
+				wrongGroups := []string{"some-wrong-group", "some-other-group"}
+				sessionData.Fosite.Claims.Extra["groups"] = wrongGroups
+				return wrongGroups
 			},
 			breakRefreshSessionData: func(t *testing.T, pinnipedSession *psession.PinnipedSession, _, _ string) {
 				customSessionData := pinnipedSession.Custom
@@ -1423,7 +1433,7 @@ func testSupervisorLogin(
 	t *testing.T,
 	createIDP func(t *testing.T) string,
 	requestAuthorization func(t *testing.T, downstreamAuthorizeURL string, downstreamCallbackURL string, username string, password string, httpClient *http.Client),
-	editRefreshSessionDataWithoutBreaking func(t *testing.T, pinnipedSession *psession.PinnipedSession),
+	editRefreshSessionDataWithoutBreaking func(t *testing.T, pinnipedSession *psession.PinnipedSession) []string,
 	breakRefreshSessionData func(t *testing.T, pinnipedSession *psession.PinnipedSession, idpName string, username string),
 	createTestUser func(t *testing.T) (string, string),
 	deleteTestUser func(t *testing.T, username string),
@@ -1583,6 +1593,7 @@ func testSupervisorLogin(
 		// token exchange on the original token
 		doTokenExchange(t, &downstreamOAuth2Config, tokenResponse, httpClient, discovery)
 
+		refreshedGroups := wantDownstreamIDTokenGroups
 		if editRefreshSessionDataWithoutBreaking != nil {
 			latestRefreshToken := tokenResponse.RefreshToken
 			signatureOfLatestRefreshToken := getFositeDataSignature(t, latestRefreshToken)
@@ -1598,7 +1609,7 @@ func testSupervisorLogin(
 			pinnipedSession, ok := storedRefreshSession.GetSession().(*psession.PinnipedSession)
 			require.True(t, ok, "should have been able to cast session data to PinnipedSession")
 
-			editRefreshSessionDataWithoutBreaking(t, pinnipedSession)
+			refreshedGroups = editRefreshSessionDataWithoutBreaking(t, pinnipedSession)
 
 			// Then save the mutated Secret back to Kubernetes.
 			// There is no update function, so delete and create again at the same name.
@@ -1614,7 +1625,7 @@ func testSupervisorLogin(
 		expectRefreshedIDTokenClaims := []string{"iss", "exp", "sub", "aud", "auth_time", "iat", "jti", "rat", "username", "groups", "at_hash"}
 		verifyTokenResponse(t,
 			refreshedTokenResponse, discovery, downstreamOAuth2Config, "",
-			expectRefreshedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), wantDownstreamIDTokenGroups)
+			expectRefreshedIDTokenClaims, wantDownstreamIDTokenSubjectToMatch, wantDownstreamIDTokenUsernameToMatch(username), refreshedGroups)
 
 		require.NotEqual(t, tokenResponse.AccessToken, refreshedTokenResponse.AccessToken)
 		require.NotEqual(t, tokenResponse.RefreshToken, refreshedTokenResponse.RefreshToken)
