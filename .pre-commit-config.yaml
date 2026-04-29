@@ -1,6 +1,8 @@
 # This is a configuration for https://pre-commit.com/.
 # On macOS, try `brew install pre-commit` and then run `pre-commit install`.
 exclude: '^(site|generated)/'
+default_install_hook_types: [ pre-commit, commit-msg ]
+default_stages: [ pre-commit ]
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v4.5.0
@@ -24,3 +26,9 @@ repos:
     name: Validate copyright year
     entry: hack/check-copyright-year.sh
     language: script
+    stages: [ pre-commit ]
+  - id: check-signoff
+    name: Check for Signed-off-by
+    entry: 'grep -q "^Signed-off-by: "'
+    language: system
+    stages: [ commit-msg ]
