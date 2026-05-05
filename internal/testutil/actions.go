@@ -1,4 +1,4 @@
-// Copyright 2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2024-2026 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package testutil
@@ -16,6 +16,7 @@ func ScrubListOptionsForActions(t *testing.T, actions []coretesting.Action) []co
 	t.Helper()
 
 	scrubbedActions := make([]coretesting.Action, 0, len(actions))
+
 	for _, action := range actions {
 		switch action.GetVerb() {
 		case "watch":
@@ -23,7 +24,13 @@ func ScrubListOptionsForActions(t *testing.T, actions []coretesting.Action) []co
 			require.True(t, ok)
 			watchAction.ListOptions.AllowWatchBookmarks = false
 			watchAction.ListOptions.TimeoutSeconds = nil
+
+			// These get filled in starting in k8s 1.36 packages, but we don't care to assert about them.
+			watchAction.ListOptions.ResourceVersion = ""
+			watchAction.WatchRestrictions.ResourceVersion = ""
+
 			scrubbedActions = append(scrubbedActions, watchAction)
+
 		case "list":
 			listAction, ok := action.(coretesting.ListActionImpl)
 			require.True(t, ok)
@@ -31,9 +38,11 @@ func ScrubListOptionsForActions(t *testing.T, actions []coretesting.Action) []co
 			listAction.ListOptions.TimeoutSeconds = nil
 			listAction.ListOptions.Limit = 0
 			scrubbedActions = append(scrubbedActions, listAction)
+
 		default:
 			scrubbedActions = append(scrubbedActions, action)
 		}
 	}
+
 	return scrubbedActions
 }

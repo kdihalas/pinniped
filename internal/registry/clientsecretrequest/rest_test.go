@@ -135,7 +135,7 @@ func TestCreate(t *testing.T) {
 			wantErrStatus: &metav1.Status{
 				Status: metav1.StatusFailure,
 				Message: `not an OIDCClientSecretRequest: &v1.Status{TypeMeta:v1.TypeMeta{Kind:"", APIVersion:""}, ` +
-					`ListMeta:v1.ListMeta{SelfLink:"", ResourceVersion:"", Continue:"", RemainingItemCount:(*int64)(nil)},` +
+					`ListMeta:v1.ListMeta{SelfLink:"", ResourceVersion:"", Continue:"", RemainingItemCount:(*int64)(nil), ShardInfo:(*v1.ShardInfo)(nil)},` +
 					` Status:"", Message:"", Reason:"", Details:(*v1.StatusDetails)(nil), Code:0}`,
 				Reason: metav1.StatusReasonBadRequest,
 				Code:   http.StatusBadRequest,
