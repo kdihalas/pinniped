@@ -490,14 +490,18 @@ func TestImpersonator(t *testing.T) {
 			clientCert:            newClientCert(t, ca, "test-username", []string{"test-group1", "test-group2"}),
 			clientImpersonateUser: rest.ImpersonationConfig{UserName: "some-other-username"},
 			// this fails because the delegating authorizer in this test only allows system:masters and fails everything else
-			wantError: `users "some-other-username" is forbidden: User "test-username" ` +
-				`cannot impersonate resource "users" in API group "" at the cluster scope: ` +
+			wantError: `namespaces is forbidden: User "test-username" ` +
+				`cannot impersonate-on:user-info:list resource "namespaces" in API group "" at the cluster scope: ` +
 				`decision made by impersonation-proxy.concierge.pinniped.dev`,
 			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
 				return []authorizer.AttributesRecord{
 					{
 						User: defaultInfoForTestUsername(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "some-other-username", ResourceRequest: true, Path: "",
+						Verb: "impersonate-on:user-info:list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+					{
+						User: defaultInfoForTestUsername(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "users", Subresource: "", Name: "some-other-username", ResourceRequest: true, Path: "",
 					},
 				}
 			},
@@ -551,35 +555,27 @@ func TestImpersonator(t *testing.T) {
 				return []authorizer.AttributesRecord{
 					{
 						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "fire", ResourceRequest: true, Path: "",
+						Verb: "impersonate-on:user-info:list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
 					},
 					{
 						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "groups", Subresource: "", Name: "elements", ResourceRequest: true, Path: "",
+						Verb: "impersonate:user-info", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "users", Subresource: "", Name: "fire", ResourceRequest: true, Path: "",
 					},
 					{
 						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "iam.gke.io/user-assertion", Name: "good", ResourceRequest: true, Path: "",
+						Verb: "impersonate:user-info", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "groups", Subresource: "", Name: "elements", ResourceRequest: true, Path: "",
 					},
 					{
 						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "iam.gke.io/user-assertion", Name: "stuff", ResourceRequest: true, Path: "",
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "users", Subresource: "", Name: "fire", ResourceRequest: true, Path: "",
 					},
 					{
 						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/roles", Name: "a-role1", ResourceRequest: true, Path: "",
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "groups", Subresource: "", Name: "elements", ResourceRequest: true, Path: "",
 					},
 					{
 						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/roles", Name: "a-role2", ResourceRequest: true, Path: "",
-					},
-					{
-						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "user-assertion.cloud.google.com", Name: "smaller", ResourceRequest: true, Path: "",
-					},
-					{
-						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "user-assertion.cloud.google.com", Name: "things", ResourceRequest: true, Path: "",
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/user/domain/name", Name: "a-domain-name", ResourceRequest: true, Path: "",
 					},
 					{
 						User: defaultInfoForTestAdmin(credentialID),
@@ -595,6 +591,22 @@ func TestImpersonator(t *testing.T) {
 					},
 					{
 						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "iam.gke.io/user-assertion", Name: "good", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "iam.gke.io/user-assertion", Name: "stuff", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "user-assertion.cloud.google.com", Name: "smaller", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "user-assertion.cloud.google.com", Name: "things", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
 						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "scopes.authorization.openshift.io", Name: "user:info", ResourceRequest: true, Path: "",
 					},
 					{
@@ -607,19 +619,23 @@ func TestImpersonator(t *testing.T) {
 					},
 					{
 						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/roles", Name: "a-role1", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/roles", Name: "a-role2", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/project/id", Name: "a-project-id", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
 						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/project/name", Name: "a-project-name", ResourceRequest: true, Path: "",
 					},
 					{
 						User: defaultInfoForTestAdmin(credentialID),
 						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/user/domain/id", Name: "a-domain-id", ResourceRequest: true, Path: "",
-					},
-					{
-						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/user/domain/name", Name: "a-domain-name", ResourceRequest: true, Path: "",
-					},
-					{
-						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "alpha.kubernetes.io/identity/project/id", Name: "a-project-id", ResourceRequest: true, Path: "",
 					},
 					{
 						User: &user.DefaultInfo{
@@ -655,18 +671,22 @@ func TestImpersonator(t *testing.T) {
 				return []authorizer.AttributesRecord{
 					{
 						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "some-other-username", ResourceRequest: true, Path: "",
+						Verb: "impersonate-on:user-info:list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
 					},
 					{
 						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "uids", Subresource: "", Name: "root", ResourceRequest: true, Path: "",
+						Verb: "impersonate:user-info", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "users", Subresource: "", Name: "some-other-username", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate:user-info", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "uids", Subresource: "", Name: "root", ResourceRequest: true, Path: "",
 					},
 					{
 						User: &user.DefaultInfo{
 							Name:   "some-other-username",
 							UID:    "root",
 							Groups: []string{"system:authenticated"},
-							Extra:  map[string][]string{},
+							Extra:  nil,
 						},
 						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
 					},
@@ -685,18 +705,22 @@ func TestImpersonator(t *testing.T) {
 				return []authorizer.AttributesRecord{
 					{
 						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "some-other-username", ResourceRequest: true, Path: "",
+						Verb: "impersonate-on:user-info:list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
 					},
 					{
 						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "uids", Subresource: "", Name: "magic", ResourceRequest: true, Path: "",
+						Verb: "impersonate:user-info", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "users", Subresource: "", Name: "some-other-username", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate:user-info", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "uids", Subresource: "", Name: "magic", ResourceRequest: true, Path: "",
 					},
 					{
 						User: &user.DefaultInfo{
 							Name:   "some-other-username",
 							UID:    "magic",
 							Groups: []string{"system:authenticated"},
-							Extra:  map[string][]string{},
+							Extra:  nil,
 						},
 						Verb: "list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
 					},
@@ -719,19 +743,31 @@ func TestImpersonator(t *testing.T) {
 				return []authorizer.AttributesRecord{
 					{
 						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "other-user-to-impersonate", ResourceRequest: true, Path: "",
+						Verb: "impersonate-on:user-info:list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
 					},
 					{
 						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "groups", Subresource: "", Name: "other-peeps", ResourceRequest: true, Path: "",
+						Verb: "impersonate:user-info", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "users", Subresource: "", Name: "other-user-to-impersonate", ResourceRequest: true, Path: "",
 					},
 					{
 						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "something.impersonation-proxy.concierge.pinniped.dev", Name: "bad data", ResourceRequest: true, Path: "",
+						Verb: "impersonate:user-info", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "groups", Subresource: "", Name: "other-peeps", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "users", Subresource: "", Name: "other-user-to-impersonate", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "groups", Subresource: "", Name: "other-peeps", ResourceRequest: true, Path: "",
 					},
 					{
 						User: defaultInfoForTestAdmin(credentialID),
 						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "key", Name: "good", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "userextras", Subresource: "something.impersonation-proxy.concierge.pinniped.dev", Name: "bad data", ResourceRequest: true, Path: "",
 					},
 					{
 						User: &user.DefaultInfo{
@@ -763,11 +799,23 @@ func TestImpersonator(t *testing.T) {
 				return []authorizer.AttributesRecord{
 					{
 						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "panda", ResourceRequest: true, Path: "",
+						Verb: "impersonate-on:user-info:list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
 					},
 					{
 						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "groups", Subresource: "", Name: "other-peeps", ResourceRequest: true, Path: "",
+						Verb: "impersonate:user-info", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "users", Subresource: "", Name: "panda", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate:user-info", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "groups", Subresource: "", Name: "other-peeps", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "users", Subresource: "", Name: "panda", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "groups", Subresource: "", Name: "other-peeps", ResourceRequest: true, Path: "",
 					},
 					{
 						User: defaultInfoForTestAdmin(credentialID),
@@ -812,11 +860,23 @@ func TestImpersonator(t *testing.T) {
 				return []authorizer.AttributesRecord{
 					{
 						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "panda", ResourceRequest: true, Path: "",
+						Verb: "impersonate-on:user-info:list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
 					},
 					{
 						User: defaultInfoForTestAdmin(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "groups", Subresource: "", Name: "other-peeps", ResourceRequest: true, Path: "",
+						Verb: "impersonate:user-info", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "users", Subresource: "", Name: "panda", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate:user-info", Namespace: "", APIGroup: "authentication.k8s.io", APIVersion: "v1", Resource: "groups", Subresource: "", Name: "other-peeps", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "users", Subresource: "", Name: "panda", ResourceRequest: true, Path: "",
+					},
+					{
+						User: defaultInfoForTestAdmin(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "groups", Subresource: "", Name: "other-peeps", ResourceRequest: true, Path: "",
 					},
 					{
 						User: defaultInfoForTestAdmin(credentialID),
@@ -858,14 +918,18 @@ func TestImpersonator(t *testing.T) {
 			clientMutateHeaders: func(header http.Header) {
 				header["imPerSonaTE-USer"] = []string{"PANDA"}
 			},
-			wantError: `users "PANDA" is forbidden: User "test-username" ` +
-				`cannot impersonate resource "users" in API group "" at the cluster scope: ` +
+			wantError: `namespaces is forbidden: User "test-username" ` +
+				`cannot impersonate-on:user-info:list resource "namespaces" in API group "" at the cluster scope: ` +
 				`decision made by impersonation-proxy.concierge.pinniped.dev`,
 			wantAuthorizerAttributes: func(credentialID string) []authorizer.AttributesRecord {
 				return []authorizer.AttributesRecord{
 					{
 						User: defaultInfoForTestUsername(credentialID),
-						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "", Resource: "users", Subresource: "", Name: "PANDA", ResourceRequest: true, Path: "",
+						Verb: "impersonate-on:user-info:list", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "namespaces", Subresource: "", Name: "", ResourceRequest: true, Path: "/api/v1/namespaces",
+					},
+					{
+						User: defaultInfoForTestUsername(credentialID),
+						Verb: "impersonate", Namespace: "", APIGroup: "", APIVersion: "v1", Resource: "users", Subresource: "", Name: "PANDA", ResourceRequest: true, Path: "",
 					},
 				}
 			},
@@ -876,7 +940,7 @@ func TestImpersonator(t *testing.T) {
 			clientMutateHeaders: func(header http.Header) {
 				header["imPerSonaTE-uid"] = []string{"007"}
 			},
-			wantError: `requested [{UID  007  authentication.k8s.io/v1  }] without impersonating a user`,
+			wantError: `requested &user.DefaultInfo{Name:"", UID:"007", Groups:[]string(nil), Extra:map[string][]string(nil)} without impersonating a user name`,
 			wantAuthorizerAttributes: func(_credentialID string) []authorizer.AttributesRecord {
 				return []authorizer.AttributesRecord{}
 			},
@@ -887,7 +951,7 @@ func TestImpersonator(t *testing.T) {
 			clientMutateHeaders: func(header http.Header) {
 				header["Impersonate-Uid"] = []string{"008"}
 			},
-			wantError: `requested [{UID  008  authentication.k8s.io/v1  }] without impersonating a user`,
+			wantError: `requested &user.DefaultInfo{Name:"", UID:"008", Groups:[]string(nil), Extra:map[string][]string(nil)} without impersonating a user name`,
 			wantAuthorizerAttributes: func(_credentialID string) []authorizer.AttributesRecord {
 				return []authorizer.AttributesRecord{}
 			},
@@ -2437,10 +2501,33 @@ type attributeRecorder struct {
 	attributes []authorizer.AttributesRecord
 }
 
-func (r *attributeRecorder) record(attributes authorizer.Attributes) {
+func (r *attributeRecorder) record(attrs authorizer.Attributes) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
-	r.attributes = append(r.attributes, *attributes.(*authorizer.AttributesRecord))
+
+	// Starting in k8s 1.36 libs, attrs is no longer of concrete type *authorizer.AttributesRecord.
+	// Instead, it is of type *impersonation.impersonateOnAttributes, which is a private type.
+	// Convert attrs to an authorizer.AttributesRecord by calling its getters.
+	fieldSelector, fieldSelectorErr := attrs.GetFieldSelector()
+	labelSelector, labelSelectorErr := attrs.GetLabelSelector()
+	record := authorizer.AttributesRecord{
+		User:                      attrs.GetUser(),
+		Verb:                      attrs.GetVerb(),
+		Namespace:                 attrs.GetNamespace(),
+		APIGroup:                  attrs.GetAPIGroup(),
+		APIVersion:                attrs.GetAPIVersion(),
+		Resource:                  attrs.GetResource(),
+		Subresource:               attrs.GetSubresource(),
+		Name:                      attrs.GetName(),
+		ResourceRequest:           attrs.IsResourceRequest(),
+		Path:                      attrs.GetPath(),
+		FieldSelectorRequirements: fieldSelector,
+		FieldSelectorParsingErr:   fieldSelectorErr,
+		LabelSelectorRequirements: labelSelector,
+		LabelSelectorParsingErr:   labelSelectorErr,
+	}
+
+	r.attributes = append(r.attributes, record)
 }
 
 func Test_isRequestForHealthCheck(t *testing.T) {
