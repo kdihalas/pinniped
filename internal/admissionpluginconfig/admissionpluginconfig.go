@@ -1,4 +1,4 @@
-// Copyright 2024-2025 the Pinniped contributors. All Rights Reserved.
+// Copyright 2024-2026 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package admissionpluginconfig
@@ -9,6 +9,8 @@ import (
 
 	"github.com/pkg/errors"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	mutatingadmissionpolicy "k8s.io/apiserver/pkg/admission/plugin/policy/mutating"
 	validatingadmissionpolicy "k8s.io/apiserver/pkg/admission/plugin/policy/validating"
 	"k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/discovery"
@@ -59,22 +61,20 @@ func configureAdmissionPlugins(
 	recommendedOptions *options.RecommendedOptions,
 	disableAdmissionPlugins []string,
 ) error {
-	if !slices.Contains(disableAdmissionPlugins, validatingadmissionpolicy.PluginName) {
-		// The admin did not explicitly disable the ValidatingAdmissionPolicy plugin, but we may still need disable it if
-		// the Kubernetes cluster on which we are running is too old. Check if the API server has such a resource.
-		hasValidatingAdmissionPolicyResource, err := k8sAPIServerHasValidatingAdmissionPolicyResource(discoveryClient)
+	if !slices.Contains(disableAdmissionPlugins, validatingadmissionpolicy.PluginName) || !slices.Contains(disableAdmissionPlugins, mutatingadmissionpolicy.PluginName) {
+		discoveredResources, err := performAPIDiscovery(discoveryClient)
 		if err != nil {
-			return fmt.Errorf("failed looking up availability of ValidatingAdmissionPolicy resource: %w", err)
+			return fmt.Errorf("failed to perform k8s API discovery for purpose of checking availability of %s resource types: %w",
+				admissionregistrationv1.GroupName, err)
 		}
 
-		if !hasValidatingAdmissionPolicyResource {
-			// Customize the admission plugins to avoid using the new ValidatingAdmissionPolicy plugin.
-			plog.Warning("could not find ValidatingAdmissionPolicy resource on this Kubernetes cluster " +
-				"(which is normal for clusters older than Kubernetes 1.30); " +
-				"disabling ValidatingAdmissionPolicy admission plugins for all Pinniped aggregated API resource types")
+		disableAdmissionPlugins = autoDisablePluginWhenResourceNotFound(
+			disableAdmissionPlugins, discoveredResources, validatingadmissionpolicy.PluginName, "1.30",
+		)
 
-			disableAdmissionPlugins = append(disableAdmissionPlugins, validatingadmissionpolicy.PluginName)
-		}
+		disableAdmissionPlugins = autoDisablePluginWhenResourceNotFound(
+			disableAdmissionPlugins, discoveredResources, mutatingadmissionpolicy.PluginName, "1.36",
+		)
 	}
 
 	// Mutate the recommendedOptions to potentially disable some admission plugins.
@@ -84,10 +84,30 @@ func configureAdmissionPlugins(
 	return nil
 }
 
-func k8sAPIServerHasValidatingAdmissionPolicyResource(discoveryClient discovery.ServerResourcesInterface) (bool, error) {
-	// Perform discovery. We are looking for ValidatingAdmissionPolicy in group
-	// admissionregistration.k8s.io at any version.
+func autoDisablePluginWhenResourceNotFound(disableAdmissionPlugins []string, resources []*metav1.APIResourceList, pluginName string, since string) []string {
+	if !slices.Contains(disableAdmissionPlugins, pluginName) {
+		// The admin did not explicitly disable the plugin, but we may still need to disable it if
+		// the Kubernetes cluster on which we are running is too old. Check if the API server has such a resource.
+		hasResource := k8sAPIServerHasResource(resources, pluginName)
+
+		if !hasResource {
+			plog.Warning("could not find resource type on this Kubernetes cluster "+
+				"(which is normal for older Kubernetes clusters); "+
+				"disabling admission plugins for all Pinniped aggregated API resource types for that Kind",
+				"kind", pluginName, "kindIntroducedInKubernetesVersion", since)
+
+			// Customize the admission plugins to avoid using the new plugin.
+			disableAdmissionPlugins = append(disableAdmissionPlugins, pluginName)
+		}
+	}
+
+	return disableAdmissionPlugins
+}
+
+func performAPIDiscovery(discoveryClient discovery.ServerResourcesInterface) ([]*metav1.APIResourceList, error) {
+	// Perform discovery. We are looking for resources in group admissionregistration.k8s.io at any version.
 	resources, err := discoveryClient.ServerPreferredResources()
+
 	partialErr := &discovery.ErrGroupDiscoveryFailed{}
 	if resources != nil && errors.As(err, &partialErr) {
 		// This is a partial discovery error, most likely caused by Pinniped's own aggregated APIs
@@ -99,30 +119,34 @@ func k8sAPIServerHasValidatingAdmissionPolicyResource(discoveryClient discovery.
 				// There was an error for the specific group that we are trying to find, so
 				// return an error. If we don't arrive here, then it must have been error(s) for
 				// some other group(s) that we are not looking for, so we can ignore those error(s).
-				return false, err
+				return nil, err
 			}
 		}
 	} else if err != nil {
 		// We got some other type of error aside from a partial failure.
-		return false, fmt.Errorf("failed to perform k8s API discovery: %w", err)
+		return nil, err
 	}
 
+	return resources, nil
+}
+
+func k8sAPIServerHasResource(resources []*metav1.APIResourceList, resourceKind string) bool {
 	// Now look at all discovered groups until we find version v1 of group admissionregistration.k8s.io.
 	for _, resourcesPerGV := range resources {
 		if resourcesPerGV.GroupVersion == admissionregistrationv1.SchemeGroupVersion.String() {
-			// Found the group, so now look to see if it includes ValidatingAdmissionPolicy as a resource,
+			// Found the group, so now look to see if it includes the given resourceKind as a resource type,
 			// which went GA in Kubernetes 1.30, and could be enabled by a feature flag in previous versions.
 			for _, resource := range resourcesPerGV.APIResources {
-				if resource.Kind == "ValidatingAdmissionPolicy" {
+				if resource.Kind == resourceKind {
 					// Found it!
-					plog.Info("found ValidatingAdmissionPolicy resource on this Kubernetes cluster",
+					plog.Info("found "+admissionregistrationv1.GroupName+" resource on this Kubernetes cluster",
 						"groupVersion", resourcesPerGV.GroupVersion, "kind", resource.Kind)
-					return true, nil
+					return true
 				}
 			}
 		}
 	}
 
-	// Didn't findValidatingAdmissionPolicy on this cluster.
-	return false, nil
+	// Didn't the resource kind on this cluster.
+	return false
 }
