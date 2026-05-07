@@ -1,4 +1,4 @@
-// Copyright 2021-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2026 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package kubecertagent
@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/rest"
 
 	"go.pinniped.dev/internal/crypto/ptls"
@@ -34,11 +33,13 @@ func TestSecureTLS(t *testing.T) {
 	client, err := kubeclient.New(kubeclient.WithConfig(config))
 	require.NoError(t, err)
 
-	// build this exactly like our production could does
+	// Build this exactly like our production code does.
 	podCommandExecutor := NewPodCommandExecutor(client.JSONConfig, client.Kubernetes)
 
 	got, err := podCommandExecutor.Exec(context.Background(), "podNamespace", "podName", "containerName", "command", "arg1", "arg2")
-	require.Equal(t, &apierrors.StatusError{}, err)
+	// Expect to get an error because the fake server above does not allow upgrade to spdy.
+	// This doesn't matter because all we really care about in this test is the results of AssertTLS.
+	require.EqualError(t, err, "unable to upgrade connection: empty server response")
 	require.Empty(t, got)
 
 	require.True(t, sawRequest)

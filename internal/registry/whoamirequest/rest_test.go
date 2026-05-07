@@ -1,4 +1,4 @@
-// Copyright 2021-2025 the Pinniped contributors. All Rights Reserved.
+// Copyright 2021-2026 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package whoamirequest
@@ -73,8 +73,10 @@ func TestCreate(t *testing.T) {
 				createValidation: nil,
 				options:          nil,
 			},
-			want:    nil,
-			wantErr: `not a WhoAmIRequest: &v1.Status{TypeMeta:v1.TypeMeta{Kind:"", APIVersion:""}, ListMeta:v1.ListMeta{SelfLink:"", ResourceVersion:"", Continue:"", RemainingItemCount:(*int64)(nil)}, Status:"", Message:"", Reason:"", Details:(*v1.StatusDetails)(nil), Code:0}`,
+			want: nil,
+			wantErr: `not a WhoAmIRequest: &v1.Status{TypeMeta:v1.TypeMeta{Kind:"", APIVersion:""}, ` +
+				`ListMeta:v1.ListMeta{SelfLink:"", ResourceVersion:"", Continue:"", RemainingItemCount:(*int64)(nil), ShardInfo:(*v1.ShardInfo)(nil)}, ` +
+				`Status:"", Message:"", Reason:"", Details:(*v1.StatusDetails)(nil), Code:0}`,
 		},
 		{
 			name: "bad options",

@@ -590,10 +590,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// this user is not allowed to impersonate other users
 			require.True(t, apierrors.IsForbidden(err), err)
 			require.EqualError(t, err, fmt.Sprintf(
-				`users "other-user-to-impersonate" is forbidden: `+
-					`User "%s" cannot impersonate resource "users" in API group "" at the cluster scope: `+
+				`secrets "%s" is forbidden: `+
+					`User "%s" cannot impersonate-on:user-info:get resource "secrets" in API group "" in the namespace "%s": `+
 					`decision made by impersonation-proxy.concierge.pinniped.dev`,
-				env.TestUser.ExpectedUsername))
+				impersonationProxyTLSSecretName(env), env.TestUser.ExpectedUsername, env.ConciergeNamespace))
 
 			// impersonate the GC service account instead which can read anything (the binding to edit allows this)
 			nestedImpersonationClientAsSA, credentialsAsSA := newImpersonationProxyClient(t, impersonationProxyURL, impersonationProxyCACertPEM,
@@ -778,7 +778,7 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			})
 
 			_, errUID := testlib.NewKubeclient(t, nestedImpersonationUIDOnly).Kubernetes.CoreV1().Secrets("foo").Get(ctx, "bar", metav1.GetOptions{})
-			msg := `requested [{UID  some-awesome-uid  authentication.k8s.io/v1  }] without impersonating a user`
+			msg := `requested &user.DefaultInfo{Name:"", UID:"some-awesome-uid", Groups:[]string(nil), Extra:map[string][]string(nil)} without impersonating a user name`
 			require.EqualError(t, errUID, msg)
 			require.True(t, apierrors.IsBadRequest(errUID), errUID) // starting in k8s 1.35 libs, this was changed from internal error to bad request
 			require.Equal(t, &apierrors.StatusError{
@@ -837,10 +837,10 @@ func TestImpersonationProxy(t *testing.T) { //nolint:gocyclo // yeah, it's compl
 			// this SA is not yet allowed to impersonate SAs
 			require.True(t, apierrors.IsForbidden(err), err)
 			require.EqualError(t, err, fmt.Sprintf(
-				`serviceaccounts "root-ca-cert-publisher" is forbidden: `+
-					`User "%s" cannot impersonate resource "serviceaccounts" in API group "" in the namespace "kube-system": `+
+				`whoamirequests.identity.concierge.%s is forbidden: `+
+					`User "%s" cannot impersonate-on:serviceaccount:create resource "whoamirequests" in API group "identity.concierge.%s" at the cluster scope: `+
 					`decision made by impersonation-proxy.concierge.pinniped.dev`,
-				serviceaccount.MakeUsername(namespaceName, saName)))
+				env.APIGroupSuffix, serviceaccount.MakeUsername(namespaceName, saName), env.APIGroupSuffix))
 
 			// webhook authorizer deny cache TTL is 10 seconds so we need to wait long enough for it to drain
 			time.Sleep(15 * time.Second)

@@ -1,4 +1,4 @@
-// Copyright 2022-2024 the Pinniped contributors. All Rights Reserved.
+// Copyright 2022-2026 the Pinniped contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package clientsecretrequest provides REST functionality for the CredentialRequest resource.
@@ -15,8 +15,8 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/validate/content"
 	genericvalidation "k8s.io/apimachinery/pkg/api/validation"
-	"k8s.io/apimachinery/pkg/api/validation/path"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -307,7 +307,7 @@ func (r *REST) validateRequest(
 			if !strings.HasPrefix(name, "client.oauth.pinniped.dev-") {
 				errs = append(errs, `must start with 'client.oauth.pinniped.dev-'`)
 			}
-			return slices.Concat(errs, path.IsValidPathSegmentName(name))
+			return slices.Concat(errs, content.IsPathSegmentName(name))
 		},
 		field.NewPath("metadata"),
 	); len(errs) > 0 {
